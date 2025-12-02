@@ -13,7 +13,7 @@ import os
 # ---------------------------------------------------------
 # Load feature matrix
 # ---------------------------------------------------------
-df = pd.read_csv("feature_data/full_features.csv")
+df = pd.read_csv("data_google_drive/feature_data/full_features.csv")
 
 worm_ids = df["original_file"].values
 
