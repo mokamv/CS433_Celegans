@@ -10,10 +10,12 @@ import seaborn as sns
 import joblib
 import os
 
+import warnings
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
 # ---------------------------------------------------------
 # Load feature matrix
 # ---------------------------------------------------------
-df = pd.read_csv("feature_data/full_features.csv")
+df = pd.read_csv("feature_data/segments_features.csv")
 
 worm_ids = df["original_file"].values
 
@@ -28,6 +30,86 @@ feature_names = df.drop(columns=["label", "filename", "original_file"]).columns
 # Worm-level CV without leakage
 # ---------------------------------------------------------
 gkf = GroupKFold(n_splits=5)
+
+
+# ---------------------------------------------------------
+# Aggregation helper functions accessible to `objective`
+# Each function takes an array-like of segment predictions
+# and returns a scalar worm-level prediction in [0,1].
+# ---------------------------------------------------------
+
+def _safe_pred(arr):
+    arr = np.asarray(arr)
+    if arr.size == 0:
+        return np.array([0.5])
+    return arr
+
+def agg_average(seg_preds):
+    arr = _safe_pred(seg_preds)
+    return float(np.mean(arr))
+
+def agg_median(seg_preds):
+    arr = _safe_pred(seg_preds)
+    return float(np.median(arr))
+
+def agg_last_k_mean(seg_preds, k=3):
+    arr = _safe_pred(seg_preds)
+    return float(np.mean(arr[-k:]))
+
+def agg_weighted_linear_last_k(seg_preds, k=10):
+    arr = _safe_pred(seg_preds)
+    last = arr[-k:]
+    n = len(last)
+    weights = np.linspace(1.0, float(n), n)
+    weights = weights / weights.sum()
+    return float(np.sum(last * weights))
+
+def agg_weighted_exp_recent(seg_preds, decay=0.9):
+    arr = _safe_pred(seg_preds)
+    n = len(arr)
+    exps = decay ** (np.arange(n)[::-1])
+    weights = exps / exps.sum()
+    return float(np.sum(arr * weights))
+def agg_trimmed_mean(seg_preds, trim=0.1):
+    arr = np.asarray(seg_preds)
+    if arr.size == 0:
+        return 0.5
+    lo = int(len(arr) * trim)
+    hi = len(arr) - lo
+    if hi <= lo:
+        return float(arr.mean())
+    return float(np.mean(np.sort(arr)[lo:hi]))
+
+def agg_entropy_weighted(seg_preds, eps=1e-8):
+    p = np.asarray(seg_preds)
+    if p.size == 0:
+        return 0.5
+    # compute binary entropy for each prediction
+    ent = -(p * np.log(p + eps) + (1 - p) * np.log(1 - p + eps))
+    w = 1.0 / (ent + 1e-6)
+    w = w / w.sum()
+    return float((p * w).sum())
+
+def agg_hybrid_percentile_or_mean(seg_preds, q=0.75, thresh=0.6):
+    arr = np.asarray(seg_preds)
+    if arr.size == 0:
+        return 0.5
+    p = float(np.percentile(arr, 100.0 * q))
+    if p > thresh:
+        return p
+    return float(arr.mean())
+
+AGG_METHODS = {
+    'average': agg_average,
+    'median': agg_median,
+    'last_3_mean': lambda a: agg_last_k_mean(a, k=3),
+    'last_5_mean': lambda a: agg_last_k_mean(a, k=5),
+    'weighted_linear_last_10': lambda a: agg_weighted_linear_last_k(a, k=10),
+    'weighted_exp_recent_decay_0.9': lambda a: agg_weighted_exp_recent(a, decay=0.9),
+    'trimmed_mean': lambda a: agg_trimmed_mean(a, trim=0.1),
+    'entropy_weighted': agg_entropy_weighted,
+    'hybrid_percentile75_thresh0.6': lambda a: agg_hybrid_percentile_or_mean(a, q=0.75, thresh=0.6)
+}
 
 # ---------------------------------------------------------
 # Objective for Optuna tuning
@@ -78,10 +160,21 @@ def objective(trial):
         # Aggregate worm-level predictions
         # ------------------------------
         test_worms = worm_ids[test_idx]
+
+        # Either allow Optuna to choose aggregation method (adds a categorical hyperparameter) or set fixed
+        agg_method = trial.suggest_categorical("agg_method", list(AGG_METHODS.keys()))
+
         for w in np.unique(test_worms):
             idx = test_worms == w
-            worm_pred = np.mean(seg_preds[idx])   # simple average
-            worm_label = y_test[idx][0]           # all segments have same label
+            segment_predictions = seg_preds[idx]
+
+            if agg_method in AGG_METHODS:
+                worm_pred = AGG_METHODS[agg_method](segment_predictions)
+            else:
+                # fallback to simple average
+                worm_pred = float(np.mean(segment_predictions)) if len(segment_predictions) > 0 else 0.5
+
+            worm_label = y_test[idx][0]  # all segments share the same worm label
             preds_all.append(worm_pred)
             labels_all.append(worm_label)
 
@@ -93,8 +186,9 @@ def objective(trial):
 # ---------------------------------------------------------
 # Run hyperparameter tuning
 # ---------------------------------------------------------
+trial_amount = 400#40
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=40)
+study.optimize(objective, n_trials=trial_amount)
 
 best_params = study.best_params
 print("Best params found:", best_params)
@@ -114,7 +208,7 @@ final_model.fit(
 )
 
 # Save model
-joblib.dump(final_model, "best_lightgbm_model.pkl")
+joblib.dump(final_model, "results_lightgbm/best_lightgbm_model.pkl")
 print("\nSaved best model as best_lightgbm_model.pkl")
 
 
@@ -160,7 +254,7 @@ plt.xlabel("Predicted")
 plt.ylabel("True")
 plt.title("Worm-level Confusion Matrix")
 plt.tight_layout()
-plt.savefig("confusion_matrix.png")
+plt.savefig("results_lightgbm/confusion_matrix.png")
 plt.close()
 
 
@@ -175,7 +269,7 @@ plt.barh(feature_names[idx], importances[idx])
 plt.gca().invert_yaxis()
 plt.title("LightGBM Feature Importance (Gain)")
 plt.tight_layout()
-plt.savefig("feature_importance_gain.png")
+plt.savefig("results_lightgbm/feature_importance_gain.png")
 plt.close()
 
 
@@ -200,10 +294,78 @@ plt.barh(feature_names[sorted_idx], perm.importances_mean[sorted_idx])
 plt.gca().invert_yaxis()
 plt.title("Permutation Importance (F1 impact)")
 plt.tight_layout()
-plt.savefig("feature_importance_permutation.png")
+plt.savefig("results_lightgbm/feature_importance_permutation.png")
 plt.close()
 
 print("\nAll plots saved:")
-print("- confusion_matrix.png")
-print("- feature_importance_gain.png")
-print("- feature_importance_permutation.png")
+print("- results_lightgbm/confusion_matrix.png")
+print("- results_lightgbm/feature_importance_gain.png")
+print("- results_lightgbm/feature_importance_permutation.png")
+
+
+# ---------------------------------------------------------
+# Additional aggregation methods evaluation (worm-level)
+# Uses AGG_METHODS defined above.
+# ---------------------------------------------------------
+
+
+# ---------------------------------------------------------
+# Quick evaluation of aggregation methods using worm-level CV
+# This does not modify the tuned model; it runs extra folds
+# with the same GroupKFold used above and prints a comparison.
+# ---------------------------------------------------------
+
+print('\nEvaluating additional aggregation methods on worm-level CV...')
+agg_results = []
+for name, func in AGG_METHODS.items():
+    worm_preds = []
+    worm_true = []
+    for train_idx, test_idx in gkf.split(X, y, groups=worm_ids):
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+
+        # train a fresh fold model (lightweight LGBM with best params)
+        fold_model = lgb.LGBMClassifier(**best_params, n_estimators=100)
+        fold_model.fit(X_train, y_train)
+
+        seg_preds = fold_model.predict_proba(X_test)[:, 1]
+        test_worms = worm_ids[test_idx]
+
+        for w in np.unique(test_worms):
+            idx = (test_worms == w)
+            worm_pred = func(seg_preds[idx])
+            worm_preds.append(worm_pred)
+            worm_true.append(y_test[idx][0])
+
+    worm_preds_bin = (np.array(worm_preds) > 0.5).astype(int)
+    acc = accuracy_score(worm_true, worm_preds_bin)
+    f1 = f1_score(worm_true, worm_preds_bin)
+    agg_results.append((name, acc, f1))
+    print(f"{name}: Accuracy={acc:.4f}, F1={f1:.4f}")
+
+# Optionally save results and plot comparison
+os.makedirs('results_lightgbm', exist_ok=True)
+res_df = pd.DataFrame(agg_results, columns=['agg_method', 'accuracy', 'f1'])
+
+# Print highest F1 and highest accuracy results (include the other metric too)
+best_f1_row = res_df.loc[res_df['f1'].idxmax()]
+best_acc_row = res_df.loc[res_df['accuracy'].idxmax()]
+print(f"Highest F1: {best_f1_row['f1']:.4f} (method: {best_f1_row['agg_method']}), Accuracy: {best_f1_row['accuracy']:.4f}")
+print(f"Highest Accuracy: {best_acc_row['accuracy']:.4f} (method: {best_acc_row['agg_method']}), F1: {best_acc_row['f1']:.4f}")
+
+# Plot accuracy and F1 for each aggregation method (sorted by F1)
+res_df_sorted = res_df.sort_values('f1', ascending=False)
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 6), sharey=True)
+sns.barplot(x='accuracy', y='agg_method', data=res_df_sorted, ax=axes[0], palette='Blues_d')
+axes[0].set_title('Aggregation Methods — Accuracy')
+axes[0].set_xlabel('Accuracy')
+
+sns.barplot(x='f1', y='agg_method', data=res_df_sorted, ax=axes[1], palette='Greens_d')
+axes[1].set_title('Aggregation Methods — F1 Score')
+axes[1].set_xlabel('F1 Score')
+
+plt.tight_layout()
+plt.savefig('results_lightgbm/agg_method_comparison.png')
+plt.close()
+print('Saved plot to results_lightgbm/agg_method_comparison.png')
