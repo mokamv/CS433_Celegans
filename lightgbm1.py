@@ -11,18 +11,22 @@ import joblib
 import os
 
 # ---------------------------------------------------------
-# Load feature matrix
+# Load SEGMENT-LEVEL feature matrix
 # ---------------------------------------------------------
-df = pd.read_csv("feature_data/full_features.csv")
+df = pd.read_csv("feature_data/segments_features.csv")   # <<—— CHANGED
 
-worm_ids = df["original_file"].values
+# Worm ID per segment
+worm_ids = df["original_file"].values       # same column naming
 
-# The label (0 = undrugged, 1 = drugged)
+# Segment-level labels
 y = df["label"].values
 
 # Drop non-feature columns
 X = df.drop(columns=["label", "filename", "original_file"]).values
 feature_names = df.drop(columns=["label", "filename", "original_file"]).columns
+
+print("Loaded segment-level dataset:", df.shape)
+print("Unique worms:", len(np.unique(worm_ids)))
 
 # ---------------------------------------------------------
 # Worm-level CV without leakage
@@ -30,7 +34,7 @@ feature_names = df.drop(columns=["label", "filename", "original_file"]).columns
 gkf = GroupKFold(n_splits=5)
 
 # ---------------------------------------------------------
-# Objective for Optuna tuning
+# Optuna objective
 # ---------------------------------------------------------
 def objective(trial):
     params = {
@@ -49,10 +53,10 @@ def objective(trial):
         "lambda_l2": trial.suggest_float("lambda_l2", 0.0, 2.0)
     }
 
-    # Collect worm-level predictions across folds
     preds_all = []
     labels_all = []
     
+    # Worm-level grouped CV
     for train_idx, test_idx in gkf.split(X, y, groups=worm_ids):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
@@ -60,47 +64,39 @@ def objective(trial):
         train_data = lgb.Dataset(X_train, y_train)
         test_data  = lgb.Dataset(X_test,  y_test)
 
-        # Use callback API for early stopping
-        callbacks = [lgb.early_stopping(stopping_rounds=40, verbose=False)]
-
         model = lgb.train(
             params,
             train_data,
             valid_sets=[test_data],
             num_boost_round=300,
-            callbacks=callbacks
+            callbacks=[lgb.early_stopping(40, verbose=False)]
         )
 
-        # Make segment-level predictions
         seg_preds = model.predict(X_test)
-
-        # ------------------------------
-        # Aggregate worm-level predictions
-        # ------------------------------
         test_worms = worm_ids[test_idx]
+
+        # Worm-level voting: simple average
         for w in np.unique(test_worms):
-            idx = test_worms == w
-            worm_pred = np.mean(seg_preds[idx])   # simple average
-            worm_label = y_test[idx][0]           # all segments have same label
+            idx = (test_worms == w)
+            worm_pred = seg_preds[idx].mean()
+            worm_label = y_test[idx][0]
             preds_all.append(worm_pred)
             labels_all.append(worm_label)
 
-    # Worm-level F1 score
     preds_final = (np.array(preds_all) > 0.5).astype(int)
     return f1_score(labels_all, preds_final)
 
-
 # ---------------------------------------------------------
-# Run hyperparameter tuning
+# Run optimization
 # ---------------------------------------------------------
 study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=40)
 
 best_params = study.best_params
-print("Best params found:", best_params)
+print("Best params:", best_params)
 
 # ---------------------------------------------------------
-# Final model training using full dataset
+# Train final model on all segments
 # ---------------------------------------------------------
 final_model = lgb.LGBMClassifier(
     **best_params,
@@ -113,13 +109,11 @@ final_model.fit(
     callbacks=[lgb.early_stopping(40, verbose=False)]
 )
 
-# Save model
-joblib.dump(final_model, "best_lightgbm_model.pkl")
-print("\nSaved best model as best_lightgbm_model.pkl")
-
+joblib.dump(final_model, "lightgbm_segment_model.pkl")
+print("Saved segment model.")
 
 # ---------------------------------------------------------
-# Worm-level CV evaluation (accuracy, F1, confusion)
+# Evaluate in proper worm-level CV
 # ---------------------------------------------------------
 worm_preds = []
 worm_true = []
@@ -145,65 +139,20 @@ worm_preds_bin = (np.array(worm_preds) > 0.5).astype(int)
 acc = accuracy_score(worm_true, worm_preds_bin)
 f1  = f1_score(worm_true, worm_preds_bin)
 
-print(f"\nWorm-level Accuracy: {acc:.4f}")
+print(f"Worm-level Accuracy: {acc:.4f}")
 print(f"Worm-level F1 Score: {f1:.4f}")
 
-
 # ---------------------------------------------------------
-# Confusion matrix (worm level)
+# Confusion matrix
 # ---------------------------------------------------------
 cm = confusion_matrix(worm_true, worm_preds_bin)
-
 plt.figure(figsize=(5,4))
 sns.heatmap(cm, annot=True, cmap="Blues", fmt="d")
 plt.xlabel("Predicted")
 plt.ylabel("True")
 plt.title("Worm-level Confusion Matrix")
 plt.tight_layout()
-plt.savefig("confusion_matrix.png")
+plt.savefig("cm_lightgbm_segments.png")
 plt.close()
 
-
-# ---------------------------------------------------------
-# Feature importance plot
-# ---------------------------------------------------------
-importances = final_model.booster_.feature_importance(importance_type="gain")
-
-plt.figure(figsize=(8,10))
-idx = np.argsort(importances)[::-1]
-plt.barh(feature_names[idx], importances[idx])
-plt.gca().invert_yaxis()
-plt.title("LightGBM Feature Importance (Gain)")
-plt.tight_layout()
-plt.savefig("feature_importance_gain.png")
-plt.close()
-
-
-# ---------------------------------------------------------
-# Permutation importance (slow but more reliable)
-# ---------------------------------------------------------
-print("\nRunning permutation importance")
-
-perm = permutation_importance(
-    final_model,
-    X,
-    y,
-    scoring="f1",
-    n_repeats=20,
-    random_state=42
-)
-
-sorted_idx = perm.importances_mean.argsort()[::-1]
-
-plt.figure(figsize=(8,10))
-plt.barh(feature_names[sorted_idx], perm.importances_mean[sorted_idx])
-plt.gca().invert_yaxis()
-plt.title("Permutation Importance (F1 impact)")
-plt.tight_layout()
-plt.savefig("feature_importance_permutation.png")
-plt.close()
-
-print("\nAll plots saved:")
-print("- confusion_matrix.png")
-print("- feature_importance_gain.png")
-print("- feature_importance_permutation.png")
+print("Saved confusion matrix.")
