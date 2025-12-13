@@ -971,6 +971,8 @@ def process_all_files(input_dir, output_dir="feature_data"):
         print(f"Found {len(metadata)} files in {data_type} metadata")
         
         all_features = []
+        printed_feature_check = False
+
         for _, row in tqdm(metadata.iterrows(), total=len(metadata), desc=f"Processing {data_type}"):
             try:
                 if 'relative_path' in metadata.columns:
@@ -985,6 +987,29 @@ def process_all_files(input_dir, output_dir="feature_data"):
                 # Read and extract features
                 df = pd.read_csv(file_path)
                 features = extract_all_features(df)
+                # ---- EARLY FEATURE CHECK (prints once) ----
+                if not printed_feature_check:
+                    print("\n[DEBUG] Feature extraction sanity check:")
+                    
+                    new_feature_keys = [
+                        k for k in features.keys()
+                        if k.startswith(("J_",)) or
+                        k in (
+                            'frac_pause','frac_run','frac_turn',
+                            'mean_run_length','transition_entropy',
+                            'burst_count','early_late_speed_ratio',
+                            'turn_event_rate','last_active_frame'
+                        )
+                    ]
+
+                    print(f"  Total features extracted: {len(features)}")
+                    print(f"  Detected {len(new_feature_keys)} NEW features")
+                    print("  Example new features:")
+                    for k in sorted(new_feature_keys)[:10]:
+                        print(f"   - {k}")
+
+                    printed_feature_check = True
+                    print("[DEBUG] Feature check complete. Continuing...\n")
                 
                 # Add metadata information
                 features['filename'] = row['file']
