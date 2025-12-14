@@ -647,23 +647,40 @@ def calculate_additional_features(df):
     """Calculate some additional advanced features for richer analysis.
     Added by Joost."""
     features = {}
-    # Median absolute deviation (MAD)
+   # Median absolute deviation (MAD) — safe
     for col in ['speed', 'x', 'y', 'turning_angle']:
         if col in df.columns:
-            features[f'{col}_mad'] = median_abs_deviation(df[col].dropna())
+            v = df[col].dropna().values
+            if len(v) > 0:
+                mad = median_abs_deviation(v, scale=1)
+                features[f'{col}_mad'] = 0 if np.isnan(mad) else mad
+            else:
+                features[f'{col}_mad'] = 0
+
     # Interquartile range (IQR)
     for col in ['x', 'y', 'turning_angle']:
         if col in df.columns:
             features[f'{col}_iqr'] = iqr(df[col].dropna())
     # Net displacement and straightness index
+    # Net displacement and straightness index (robust)
     if set(['x', 'y']).issubset(df.columns):
-        x = df['x'].dropna()
-        y = df['y'].dropna()
-        if len(x) > 1 and len(y) > 1:
-            net_disp = np.sqrt((x.iloc[-1] - x.iloc[0])**2 + (y.iloc[-1] - y.iloc[0])**2)
-            total_dist = np.sum(np.sqrt(np.diff(x)**2 + np.diff(y)**2))
+        xy = df[['x', 'y']].dropna()
+        if len(xy) > 1:
+            x = xy['x'].values
+            y = xy['y'].values
+
+            net_disp = np.sqrt((x[-1] - x[0])**2 + (y[-1] - y[0])**2)
+            step_dist = np.sqrt(np.diff(x)**2 + np.diff(y)**2)
+            total_dist = np.sum(step_dist)
+
             features['net_displacement_all'] = net_disp
-            features['straightness_index_all'] = net_disp / total_dist if total_dist > 0 else 0
+            features['straightness_index_all'] = (
+                net_disp / total_dist if total_dist > 0 else 0
+            )
+        else:
+            features['net_displacement_all'] = 0
+            features['straightness_index_all'] = 0
+
     # Time to max speed
     if 'speed' in df.columns and 'time' in df.columns:
         speed = df['speed'].dropna()
@@ -671,16 +688,35 @@ def calculate_additional_features(df):
         if len(speed) > 0 and len(time) > 0:
             idx = np.argmax(speed)
             features['time_to_max_speed'] = time.iloc[idx] - time.iloc[0]
-    # Acceleration and jerk statistics
+    # Acceleration and jerk statistics (robust)
     if 'speed' in df.columns:
         speed = df['speed'].dropna().values
+
         if len(speed) > 2:
             accel = np.diff(speed)
+            accel = accel[np.isfinite(accel)]
+
+            if len(accel) > 0:
+                features['acceleration_median'] = np.median(accel)
+                features['acceleration_iqr'] = iqr(accel) if len(accel) > 1 else 0
+            else:
+                features['acceleration_median'] = 0
+                features['acceleration_iqr'] = 0
+
             jerk = np.diff(accel)
-            features['acceleration_median'] = np.median(accel)
-            features['acceleration_iqr'] = iqr(accel)
-            features['jerk_median'] = np.median(jerk) if len(jerk) > 0 else 0
-            features['jerk_iqr'] = iqr(jerk) if len(jerk) > 0 else 0
+            jerk = jerk[np.isfinite(jerk)]
+
+            if len(jerk) > 0:
+                features['jerk_median'] = np.median(jerk)
+                features['jerk_iqr'] = iqr(jerk) if len(jerk) > 1 else 0
+            else:
+                features['jerk_median'] = 0
+                features['jerk_iqr'] = 0
+        else:
+            features['acceleration_median'] = 0
+            features['acceleration_iqr'] = 0
+            features['jerk_median'] = 0
+            features['jerk_iqr'] = 0
     return features
 
 def calculate_state_features(
@@ -938,6 +974,10 @@ def extract_all_features(df):
     features.update(calculate_turn_event_features(df))
     features.update(calculate_terminal_features(df))
 
+    # Final NaN/inf safety clamp (should not trigger anymore)
+    for k, v in features.items():
+        if not np.isfinite(v):
+            features[k] = 0
 
     return features
 
@@ -971,7 +1011,6 @@ def process_all_files(input_dir, output_dir="feature_data"):
         print(f"Found {len(metadata)} files in {data_type} metadata")
         
         all_features = []
-        printed_feature_check = False
 
         for _, row in tqdm(metadata.iterrows(), total=len(metadata), desc=f"Processing {data_type}"):
             try:
@@ -987,29 +1026,13 @@ def process_all_files(input_dir, output_dir="feature_data"):
                 # Read and extract features
                 df = pd.read_csv(file_path)
                 features = extract_all_features(df)
-                # ---- EARLY FEATURE CHECK (prints once) ----
-                if not printed_feature_check:
-                    print("\n[DEBUG] Feature extraction sanity check:")
-                    
-                    new_feature_keys = [
-                        k for k in features.keys()
-                        if k.startswith(("J_",)) or
-                        k in (
-                            'frac_pause','frac_run','frac_turn',
-                            'mean_run_length','transition_entropy',
-                            'burst_count','early_late_speed_ratio',
-                            'turn_event_rate','last_active_frame'
-                        )
-                    ]
+                
 
-                    print(f"  Total features extracted: {len(features)}")
-                    print(f"  Detected {len(new_feature_keys)} NEW features")
-                    print("  Example new features:")
-                    for k in sorted(new_feature_keys)[:10]:
-                        print(f"   - {k}")
+                print(f"  Total features extracted: {len(features)}")
+                
 
-                    printed_feature_check = True
-                    print("[DEBUG] Feature check complete. Continuing...\n")
+                
+                print("[DEBUG] Feature check complete. Continuing...\n")
                 
                 # Add metadata information
                 features['filename'] = row['file']
