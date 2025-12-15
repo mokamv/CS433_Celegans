@@ -647,7 +647,7 @@ def calculate_additional_features(df):
     """Calculate some additional advanced features for richer analysis.
     Added by Joost."""
     features = {}
-   # Median absolute deviation (MAD) — safe
+   # Median absolute deviation (MAD)
     for col in ['speed', 'x', 'y', 'turning_angle']:
         if col in df.columns:
             v = df[col].dropna().values
