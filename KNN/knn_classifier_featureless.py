@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from sklearn.model_selection import GroupKFold
-from sklearn.metrics import f1_score, accuracy_score, confusion_matrix, classification_report
+from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -35,7 +35,7 @@ PRINT_RESULTS = True
 
 features = ['speed'] # NOTE: Additional data does not have turning angle
 
-k_values = [1, 3, 5, 7, 9, 11, 15, 17, 21, 25, 27, 30, 31, 32, 35]
+k_values = [1, 3, 5, 7, 9, 11, 15, 17, 21, 25, 27, 30, 31, 32, 35, 37, 39, 41, 45, 50]
 k_results = {k: {'accuracies': [], 'f1s': [], 'y_true': [], 'y_pred': []} for k in k_values}
 
 

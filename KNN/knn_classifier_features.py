@@ -1,6 +1,5 @@
 """
-KNN classification using flattened time series with Euclidean distance.
-Features are from preprocessed data
+KNN classification using engineered features from feature_data/full_features.csv
 """
 
 
@@ -8,7 +7,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from sklearn.model_selection import GroupKFold
-from sklearn.metrics import f1_score, accuracy_score, confusion_matrix, classification_report
+from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -21,113 +20,46 @@ warnings.filterwarnings('ignore')
 DATA_DIR = Path("preprocessed_data/full") #Path("data_google_drive/preprocessed_data/full")
 METADATA_FILE = DATA_DIR / "labels_and_metadata.csv"
 RAW_DATA_DIR = Path("data") #Path("data_google_drive/data_google_drive")
+FEATURES_FILE = Path("feature_data/full_features.csv")
 
 # CONFIGURATIONS
 RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)
 
-N_NEIGHBORS = 31 # For plotting confusion matrix
+N_NEIGHBORS = 31
 K_FOLDS = 5
 PLOT_CONFUSION_MATRIX = True
 PLOT_K_ANALYSIS = True
-ADDITIONAL_DATA = True  # Load extra data from Raw folder
 PRINT_RESULTS = True
 
-features = ['speed'] # NOTE: Additional data does not have turning angle
-
-k_values = [1, 3, 5, 7, 9, 11, 15, 17, 21, 25, 27, 30, 31, 32, 35]
+k_values = [1, 3, 5, 7, 9, 11, 15, 17, 21, 25, 27, 30, 31, 32, 35, 41, 45, 51]
 k_results = {k: {'accuracies': [], 'f1s': [], 'y_true': [], 'y_pred': []} for k in k_values}
 
 
 # LOAD DATA
 
-def load_and_flatten(file_path, features=features):
-    """Load time series and flatten to a feature vector."""
-    
-    df = pd.read_csv(file_path)
-    df.columns = df.columns.str.lower() # Handle both lowercase and uppercase column names
-    ts_data = df[features].values
-    ts_data = pd.DataFrame(ts_data).fillna(method='ffill').fillna(0).values # Handle NaN
-    
-    return ts_data.flatten()
+print("Loading feature data...")
+df = pd.read_csv(FEATURES_FILE)
 
+# Separate features from metadata
+metadata_cols = ['filename', 'label', 'original_file']
+feature_cols = [col for col in df.columns if col not in metadata_cols]
 
-X_list = []
-y_list = []
-worm_ids = []
+print(f"Total features: {len(feature_cols)}")
+print(f"Total samples: {len(df)}")
+print(f"  Undrugged (label=0): {(df['label']==0).sum()}")
+print(f"  Drugged (label=1): {(df['label']==1).sum()}")
 
-# Load from metadata
-metadata = pd.read_csv(METADATA_FILE)
+# Extract features and labels
+X = df[feature_cols].values
+y = df['label'].values
+worm_ids = df['original_file'].values
 
-for idx, row in metadata.iterrows():
-    # Fix path
-    relative_path = row['relative_path']
-    if 'TERBINAFINE- (control)-' in relative_path:
-        relative_path = 'TERBINAFINE- (control)'
-    
-    file_path = DATA_DIR / relative_path / row['file']
-    
-    try:
-        vec = load_and_flatten(file_path)
-        X_list.append(vec)
-        y_list.append(row['label'])
-        worm_ids.append(row['original_file'])
-        
-        if (idx + 1) % 20 == 0:
-            print(f"  Loaded {idx + 1}/{len(metadata)} worms")
-    except Exception as e:
-        print(f"  Warning: Could not load {file_path}: {e}")
+# Handle any NaN/inf values
+X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
-
-# Load additional data from NoTerbinafine (label=0) and Terbinafine (label=1)
-
-if ADDITIONAL_DATA:
-    additional_folders = [
-        ('NoTerbinafine', 0),  # Undrugged
-        ('Terbinafine', 1)      # Drugged
-    ]
-
-    initial_count = len(X_list)
-
-    for folder_name, label in additional_folders:
-        folder_path = RAW_DATA_DIR / folder_name
-        if folder_path.exists():
-            csv_files = list(folder_path.glob("*.csv"))
-            print(f"  Found {len(csv_files)} files in {folder_name} (label={label})")
-            
-            for csv_file in csv_files:
-                try:
-                    vec = load_and_flatten(csv_file)
-                    X_list.append(vec)
-                    y_list.append(label)
-                    worm_ids.append(csv_file.stem)  # Use filename as worm ID
-                except Exception as e:
-                    print(f"    Warning: Could not load {csv_file.name}: {e}")
-        else:
-            print(f"  Warning: {folder_name} not found")
-
-    additional_count = len(X_list) - initial_count
-
-
-# Pad all vectors to same length
-max_len = max(len(x) for x in X_list)
-print(f"\nPadding vectors to length: {max_len}")
-
-X_padded = []
-for vec in X_list:
-    if len(vec) < max_len:
-        # if shorter, pad with zeros
-        vec = np.pad(vec, (0, max_len - len(vec)), 'constant')
-    else:
-        vec = vec[:max_len]
-    X_padded.append(vec)
-
-X = np.array(X_padded)
-y = np.array(y_list)
-worm_ids = np.array(worm_ids)
-
-print(f"Final dataset shape: {X.shape}")
-print(f"  {X.shape[0]} worms, {X.shape[1]} features per worm")
+print(f"\nFeature matrix shape: {X.shape}")
+print(f"  {X.shape[0]} worms, {X.shape[1]} features")
 
 
 # Normalize features
@@ -136,6 +68,8 @@ X_scaled = scaler.fit_transform(X)
 
 
 # CROSS-VALIDATION & K-VALUE ANALYSIS
+
+print("\nRunning cross-validation...")
 
 gkf = GroupKFold(n_splits=K_FOLDS)
 
@@ -165,17 +99,18 @@ for fold_idx, (train_idx, test_idx) in enumerate(gkf.split(X_scaled, y, groups=w
         k_results[k]['y_pred'].append(y_pred)
 
 
+# RESULTS
+
 if PRINT_RESULTS:
     print("\n" + "=" * 50)
     print("K-VALUE ANALYSIS")
     print("=" * 50)
 
-    # Aggregate results
     k_summary = []
     for k in k_values:
-        # Skip K values that have no results (too large for all folds)
+        # Skip K values that have no results
         if len(k_results[k]['accuracies']) == 0:
-            print(f"  K={k:2d} Fold too large for training set")
+            print(f"  K={k:2d} Skipped (too large for training set)")
             continue
             
         mean_acc = np.mean(k_results[k]['accuracies'])
@@ -191,8 +126,8 @@ if PRINT_RESULTS:
             'f1_std': std_f1
         })
         print(f"  K={k:2d} Acc={mean_acc:.4f}±{std_acc:.4f}, F1={mean_f1:.4f}±{std_f1:.4f}")
-    
-    
+
+
 # PLOTS
 
 if PLOT_CONFUSION_MATRIX:
@@ -208,7 +143,7 @@ if PLOT_CONFUSION_MATRIX:
                 yticklabels=['Undrugged', 'Drugged'])
     plt.xlabel('Predicted')
     plt.ylabel('True')
-    plt.title(f'Featureless KNN Confusion Matrix (k={N_NEIGHBORS})')
+    plt.title(f'Feature-based KNN Confusion Matrix (k={N_NEIGHBORS})')
     plt.tight_layout()
     plt.savefig('KNN/featureless_knn_confusion_matrix.pdf', dpi=300)
 
