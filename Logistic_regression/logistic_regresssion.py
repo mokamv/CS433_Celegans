@@ -28,7 +28,7 @@ CORR_THRESHOLD = 0.95
 VAR_THRESHOLD = 1e-4
 
 RANDOM_STATE = 42
-SEGMENT_MODE = "last"   # options: "last", "first"
+SEGMENT_MODE = "first"   # options: "last", "first"
 
 
 SEGMENT_SWEEP = list(range(1, 31))
