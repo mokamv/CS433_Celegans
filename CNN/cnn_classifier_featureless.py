@@ -1,5 +1,5 @@
 """
-Created with help from Claude Sonnet 4.5 (2025)
+DECLARATION: Parts of this code written with help from Claude Sonnet 4.5 (Anthropic, 2025)
 
 CNN classification
 """
