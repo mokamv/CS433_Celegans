@@ -18,9 +18,9 @@ warnings.filterwarnings('ignore')
 
 
 # PATHS
-DATA_DIR = Path("../data_google_drive/preprocessed_data/full")
+DATA_DIR = Path("preprocessed_data/full")
 METADATA_FILE = DATA_DIR / "labels_and_metadata.csv"
-RAW_DATA_DIR = Path("../data_google_drive/data_google_drive")
+RAW_DATA_DIR = Path("data")
 
 # CONFIGURATIONS
 RANDOM_SEED = 42
@@ -208,7 +208,7 @@ if PLOT_CONFUSION_MATRIX:
     plt.ylabel('True')
     plt.title(f'Featureless KNN Confusion Matrix (k={N_NEIGHBORS})')
     plt.tight_layout()
-    plt.savefig('../Figures/featureless_knn_confusion_matrix.pdf', dpi=300)
+    plt.savefig('KNN/featureless_knn_confusion_matrix.pdf', dpi=300)
 
 if PLOT_K_ANALYSIS:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
@@ -232,4 +232,4 @@ if PLOT_K_ANALYSIS:
     ax2.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig('../Figures/featureless_knn_k_analysis.pdf', dpi=300)
+    plt.savefig('KNN/featureless_knn_k_analysis.pdf', dpi=300)

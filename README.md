@@ -2,7 +2,7 @@
 
 This repository contains code for analyzing the movement data of C. elegans worms. It uses trajectory data to
 - predict time from death using linear regression
-- classify whether a worm is drug-treated or not using logistic regression, SVM, and KNN
+- classify whether a worm is drug-treated or not using logistic regression, SVM, CNN and KNN
 
 ## How to Use
 
@@ -16,14 +16,16 @@ pip install -r requirements.txt
 ```
 3. Run the desired model scripts (KNN, SVM, Logistic Regression, Death Prediction with Linear Regression) from the main directory.
 
-```
-python death_prediction_linear_regression/death_prediction.py
-python Logistic_regression/logistic_regression.py
-python SVM/svm_classification.py
-python KNN/knn_classification.py
-```
 
-Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories.
+Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories. If you wish to re-run these steps, you need to extract the data zip file and run the `preprocessing.py` and `feature_extraction.py` scripts, both of which take very long to run. The zip could not be added because of githubs size limits, so please refer to 
+
+Sahand Jamal Rahi, PhD
+Assistant Professor
+Laboratory of the Physics of Biological Systems
+Institute of Physics
+EPFL  
+
+Preprocessing was only done on the original 104 worms, meaning that the script will not process the additional 18 worms.
 
 ## Data Structure & Model Choices
 
@@ -53,8 +55,25 @@ Feature extraction is done in the `feature_extraction.py` script. It computes st
 
 ## KNN
 
+```
+python KNN/knn_classification.py
+```
+## CNN
+
+```
+python CNN/cnn_classifier_featureless.py
+```
 ## SVM
+```
+python SVM/SVM.py
+```
 
 ## Logistic Regression
+```
+python Logistic_regression/logistic_regression.py
+```
 
 ## Death Prediction with Linear Regression
+```
+python death_prediction_linear_regression/death_prediction.py
+```
