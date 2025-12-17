@@ -16,14 +16,9 @@ pip install -r requirements.txt
 ```
 3. Run the desired model scripts (KNN, SVM, Logistic Regression, Death Prediction with Linear Regression) from the main directory.
 
-```
-python death_prediction_linear_regression/death_prediction.py
-python Logistic_regression/logistic_regression.py
-python SVM/svm_classification.py
-python KNN/knn_classification.py
-```
 
-Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories.
+Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories. If you wish to re-run these steps, you need a data folder with the raw trajectory data, provided by Sahand Jamal Rahi, Assistant Professor of the Laboratory of the Physics of Biological Systems in the
+Institute of Physics at EPFL.
 
 ## Data Structure & Model Choices
 
@@ -53,8 +48,25 @@ Feature extraction is done in the `feature_extraction.py` script. It computes st
 
 ## KNN
 
+```
+python KNN/knn_classification.py
+```
+## CNN
+
+```
+python CNN/cnn_classifier_featureless.py
+```
 ## SVM
+```
+python SVM/SVM.py
+```
 
 ## Logistic Regression
+```
+python Logistic_regression/logistic_regression.py
+```
 
 ## Death Prediction with Linear Regression
+```
+python death_prediction_linear_regression/death_prediction.py
+```

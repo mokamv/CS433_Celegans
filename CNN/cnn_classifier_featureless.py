@@ -21,9 +21,9 @@ warnings.filterwarnings('ignore')
 
 
 # PATHS
-DATA_DIR = Path("../data_google_drive/preprocessed_data/full")
+DATA_DIR = Path("preprocessed_data/full")
 METADATA_FILE = DATA_DIR / "labels_and_metadata.csv"
-RAW_DATA_DIR = Path("../data_google_drive/data_google_drive")
+RAW_DATA_DIR = Path("data")
 
 # CONFIGURATIONS
 RANDOM_SEED = 42
@@ -336,5 +336,5 @@ if PLOT_CONFUSION_MATRIX:
     plt.ylabel('True')
     plt.title('CNN Confusion Matrix')
     plt.tight_layout()
-    plt.savefig('../Figures/cnn_confusion_matrix.png', dpi=300)
-    print("\nConfusion matrix saved to Figures/cnn_confusion_matrix.png")
+    plt.savefig('CNN/cnn_confusion_matrix.png', dpi=300)
+    print("\nConfusion matrix saved to CNN/cnn_confusion_matrix.png")
