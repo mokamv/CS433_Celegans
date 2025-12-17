@@ -338,7 +338,7 @@ def process_directory(input_dir, output_dir):
     print(f"Full files: {len(full_metadata)}, Segments: {len(segments_metadata)}")
 
 if __name__ == "__main__":
-    input_dir = "data_google_drive"
+    input_dir = "data"
     output_dir = "preprocessed_data"
     
     process_directory(input_dir, output_dir)

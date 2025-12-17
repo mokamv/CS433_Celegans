@@ -2,7 +2,7 @@
 
 This repository contains code for analyzing the movement data of C. elegans worms. It uses trajectory data to
 - predict time from death using linear regression
-- classify whether a worm is drug-treated or not using logistic regression, SVM, and KNN
+- classify whether a worm is drug-treated or not using logistic regression, SVM, CNN and KNN
 
 ## How to Use
 
@@ -17,8 +17,7 @@ pip install -r requirements.txt
 3. Run the desired model scripts (KNN, SVM, Logistic Regression, Death Prediction with Linear Regression) from the main directory.
 
 
-Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories. If you wish to re-run these steps, you need a data folder with the raw trajectory data, provided by Sahand Jamal Rahi, Assistant Professor of the Laboratory of the Physics of Biological Systems in the
-Institute of Physics at EPFL.
+Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories. If you wish to re-run these steps, you need to extract the data zip file and run the `preprocessing.py` and `feature_extraction.py` scripts, both of which take very long to run. Preprocessing was only done on the original 104 worms, meaning that the script will not process the additional 18 worms.
 
 ## Data Structure & Model Choices
 
