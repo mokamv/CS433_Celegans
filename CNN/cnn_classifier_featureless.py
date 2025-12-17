@@ -1,8 +1,7 @@
 """
 Created with help from Claude Sonnet 4.5 (2025)
 
-CNN classification using raw time series data (1D Convolutional Neural Network).
-True featureless approach. The method learns representations directly from raw speed data.
+CNN classification
 """
 
 import pandas as pd
