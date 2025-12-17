@@ -21,9 +21,9 @@ warnings.filterwarnings('ignore')
 
 
 # PATHS
-DATA_DIR = Path("data_google_drive/preprocessed_data/full")
+DATA_DIR = Path("../data_google_drive/preprocessed_data/full")
 METADATA_FILE = DATA_DIR / "labels_and_metadata.csv"
-RAW_DATA_DIR = Path("data_google_drive/data_google_drive")
+RAW_DATA_DIR = Path("../data_google_drive/data_google_drive")
 
 # CONFIGURATIONS
 RANDOM_SEED = 42
@@ -32,8 +32,10 @@ torch.manual_seed(RANDOM_SEED)
 
 K_FOLDS = 5
 ADDITIONAL_DATA = True
-MAX_LENGTH = 50000
 DOWNSAMPLE_FACTOR = 3  # Take every 3rd point
+
+PLOT_CONFUSION_MATRIX = True
+PRINT_RESULTS = True
 
 # CNN hyperparameters
 EPOCHS = 15
@@ -105,7 +107,7 @@ def load_time_series(file_path):
     return speed
 
 
-print("Loading time series data...")
+print("Loading time series data.")
 X_list = []
 y_list = []
 worm_ids = []
@@ -154,7 +156,7 @@ if ADDITIONAL_DATA:
 
 
 # Pad sequences
-max_len = min(max(len(x) for x in X_list), MAX_LENGTH)
+max_len = min(len(x) for x in X_list)
 print(f"\nPadding sequences to length: {max_len}")
 
 X_padded = []
@@ -225,9 +227,7 @@ def evaluate(model, loader):
 
 # CROSS-VALIDATION
 
-print("\n" + "=" * 50)
-print("CNN CROSS-VALIDATION")
-print("=" * 50)
+print("\n" + "CNN cross validation results:")
 
 gkf = GroupKFold(n_splits=K_FOLDS)
 fold_results = []
@@ -316,8 +316,8 @@ mean_f1 = np.mean([r['f1'] for r in fold_results])
 std_f1 = np.std([r['f1'] for r in fold_results])
 
 print(f"\nPerformance:")
-print(f"  Accuracy: {mean_acc:.4f} ± {std_acc:.4f}")
-print(f"  F1 Score: {mean_f1:.4f} ± {std_f1:.4f}")
+print(f"  Accuracy: {mean_acc:.4f} +- {std_acc:.4f}")
+print(f"  F1 Score: {mean_f1:.4f} +- {std_f1:.4f}")
 
 print("\nClassification Report:")
 print(classification_report(all_y_true, all_y_pred.astype(int), target_names=['Undrugged', 'Drugged']))
@@ -325,15 +325,16 @@ print(classification_report(all_y_true, all_y_pred.astype(int), target_names=['U
 
 # CONFUSION MATRIX
 
-cm = confusion_matrix(all_y_true, all_y_pred.astype(int))
+if PLOT_CONFUSION_MATRIX:
+    cm = confusion_matrix(all_y_true, all_y_pred.astype(int))
 
-plt.figure(figsize=(6, 5))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=['Undrugged', 'Drugged'],
-            yticklabels=['Undrugged', 'Drugged'])
-plt.xlabel('Predicted')
-plt.ylabel('True')
-plt.title('CNN Confusion Matrix')
-plt.tight_layout()
-plt.savefig('Figures/cnn_confusion_matrix.png', dpi=300)
-print("\nConfusion matrix saved to Figures/cnn_confusion_matrix.png")
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=['Undrugged', 'Drugged'],
+                yticklabels=['Undrugged', 'Drugged'])
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('CNN Confusion Matrix')
+    plt.tight_layout()
+    plt.savefig('../Figures/cnn_confusion_matrix.png', dpi=300)
+    print("\nConfusion matrix saved to Figures/cnn_confusion_matrix.png")
