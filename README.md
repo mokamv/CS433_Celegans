@@ -17,7 +17,15 @@ pip install -r requirements.txt
 3. Run the desired model scripts (KNN, SVM, Logistic Regression, Death Prediction with Linear Regression) from the main directory.
 
 
-Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories. If you wish to re-run these steps, you need to extract the data zip file and run the `preprocessing.py` and `feature_extraction.py` scripts, both of which take very long to run. Preprocessing was only done on the original 104 worms, meaning that the script will not process the additional 18 worms.
+Since the feature extraction and preprocessing steps can take some time, preprocessed data and extracted features are provided in the `preprocessed_data/` and `feature_data/` directories. If you wish to re-run these steps, you need to extract the data zip file and run the `preprocessing.py` and `feature_extraction.py` scripts, both of which take very long to run. The zip could not be added because of githubs size limits, so please refer to 
+
+Sahand Jamal Rahi, PhD
+Assistant Professor
+Laboratory of the Physics of Biological Systems
+Institute of Physics
+EPFL  
+
+Preprocessing was only done on the original 104 worms, meaning that the script will not process the additional 18 worms.
 
 ## Data Structure & Model Choices
 
