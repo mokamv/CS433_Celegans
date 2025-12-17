@@ -166,9 +166,7 @@ for fold_idx, (train_idx, test_idx) in enumerate(gkf.split(X_scaled, y, groups=w
 
 
 if PRINT_RESULTS:
-    print("\n" + "=" * 50)
-    print("K-VALUE ANALYSIS")
-    print("=" * 50)
+    print("\n" + "KNN classification results:")
 
     # Aggregate results
     k_summary = []
@@ -190,7 +188,7 @@ if PRINT_RESULTS:
             'f1': mean_f1,
             'f1_std': std_f1
         })
-        print(f"  K={k:2d} Acc={mean_acc:.4f}±{std_acc:.4f}, F1={mean_f1:.4f}±{std_f1:.4f}")
+        print(f"  K={k:2d} Acc={mean_acc:.4f} +- {std_acc:.4f}, F1={mean_f1:.4f}±{std_f1:.4f}")
     
     
 # PLOTS

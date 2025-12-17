@@ -1,7 +1,8 @@
 """
+Created with help from Claude Sonnet 4.5 (2025)
+
 CNN classification using raw time series data (1D Convolutional Neural Network).
 True featureless approach. The method learns representations directly from raw speed data.
-Using PyTorch for better Python 3.13 compatibility.
 """
 
 import pandas as pd
@@ -32,7 +33,7 @@ torch.manual_seed(RANDOM_SEED)
 
 K_FOLDS = 5
 ADDITIONAL_DATA = True
-MAX_LENGTH = 50000  # Downsample from 127k to 50k for speed
+MAX_LENGTH = 50000
 DOWNSAMPLE_FACTOR = 3  # Take every 3rd point
 
 # CNN hyperparameters
@@ -305,9 +306,7 @@ for fold_idx, (train_idx, test_idx) in enumerate(gkf.split(X, y, groups=worm_ids
 
 # RESULTS
 
-print("\n" + "=" * 50)
-print("OVERALL CNN RESULTS")
-print("=" * 50)
+print("\n" + "CNN results:")
 
 all_y_true = np.concatenate([r['y_true'] for r in fold_results])
 all_y_pred = np.concatenate([r['y_pred'] for r in fold_results])
