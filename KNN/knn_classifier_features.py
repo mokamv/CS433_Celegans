@@ -17,10 +17,10 @@ warnings.filterwarnings('ignore')
 
 
 # PATHS
-DATA_DIR = Path("preprocessed_data/full")
+DATA_DIR = Path("../preprocessed_data/full")
 METADATA_FILE = DATA_DIR / "labels_and_metadata.csv"
-RAW_DATA_DIR = Path("data")
-FEATURES_FILE = Path("feature_data/full_features.csv")
+RAW_DATA_DIR = Path("../data")
+FEATURES_FILE = Path("../feature_data/full_features.csv")
 
 # CONFIGURATIONS
 RANDOM_SEED = 42
@@ -38,7 +38,7 @@ k_results = {k: {'accuracies': [], 'f1s': [], 'y_true': [], 'y_pred': []} for k 
 
 # LOAD DATA
 
-print("Loading feature data...")
+print("Loading feature data")
 df = pd.read_csv(FEATURES_FILE)
 
 # Separate features from metadata
@@ -69,21 +69,16 @@ X_scaled = scaler.fit_transform(X)
 
 # CROSS-VALIDATION & K-VALUE ANALYSIS
 
-print("\nRunning cross-validation...")
-
 gkf = GroupKFold(n_splits=K_FOLDS)
 
 for fold_idx, (train_idx, test_idx) in enumerate(gkf.split(X_scaled, y, groups=worm_ids)):
     X_train, X_test = X_scaled[train_idx], X_scaled[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
     
-    # Limit K values to be less than training set size
-    max_k_for_fold = len(X_train)
-    
     # Test all K values
     for k in k_values:
-        # Skip K values that are too large for this fold
-        if k >= max_k_for_fold:
+        # Handle K values that are too large for this fold
+        if k >= len(X_train):
             continue
             
         clf = KNeighborsClassifier(n_neighbors=k)
@@ -102,9 +97,7 @@ for fold_idx, (train_idx, test_idx) in enumerate(gkf.split(X_scaled, y, groups=w
 # RESULTS
 
 if PRINT_RESULTS:
-    print("\n" + "=" * 50)
-    print("K-VALUE ANALYSIS")
-    print("=" * 50)
+    print("\n" + "Results for KNN:")
 
     k_summary = []
     for k in k_values:
@@ -145,7 +138,7 @@ if PLOT_CONFUSION_MATRIX:
     plt.ylabel('True')
     plt.title(f'Feature-based KNN Confusion Matrix (k={N_NEIGHBORS})')
     plt.tight_layout()
-    plt.savefig('KNN/features_knn_confusion_matrix.pdf', dpi=300)
+    plt.savefig('features_knn_confusion_matrix.pdf', dpi=300)
 
 if PLOT_K_ANALYSIS:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
@@ -169,4 +162,4 @@ if PLOT_K_ANALYSIS:
     ax2.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig('KNN/features_knn_k_analysis.pdf', dpi=300)
+    plt.savefig('features_knn_k_analysis.pdf', dpi=300)

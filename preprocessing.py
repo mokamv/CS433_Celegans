@@ -334,7 +334,7 @@ def process_directory(input_dir, output_dir):
         label_counts = full_df['label'].value_counts()
         print(f"Full files: {dict(label_counts)}")
     
-    print(f"\n✅ Processing complete!")
+    print(f"\n Processing completed")
     print(f"Full files: {len(full_metadata)}, Segments: {len(segments_metadata)}")
 
 if __name__ == "__main__":

@@ -18,9 +18,9 @@ warnings.filterwarnings('ignore')
 
 
 # PATHS
-DATA_DIR = Path("preprocessed_data/full")
+DATA_DIR = Path("../preprocessed_data/full")
 METADATA_FILE = DATA_DIR / "labels_and_metadata.csv"
-RAW_DATA_DIR = Path("data")
+RAW_DATA_DIR = Path("../data")
 
 # CONFIGURATIONS
 RANDOM_SEED = 42
@@ -60,11 +60,7 @@ worm_ids = []
 metadata = pd.read_csv(METADATA_FILE)
 
 for idx, row in metadata.iterrows():
-    # Fix path
     relative_path = row['relative_path']
-    if 'TERBINAFINE- (control)-' in relative_path:
-        relative_path = 'TERBINAFINE- (control)'
-    
     file_path = DATA_DIR / relative_path / row['file']
     
     try:
@@ -143,13 +139,10 @@ for fold_idx, (train_idx, test_idx) in enumerate(gkf.split(X_scaled, y, groups=w
     X_train, X_test = X_scaled[train_idx], X_scaled[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
     
-    # Limit K values to be less than training set size
-    max_k_for_fold = len(X_train)
-    
     # Test all K values
     for k in k_values:
-        # Skip K values that are too large for this fold
-        if k >= max_k_for_fold:
+        # Handling K values that are too large for this fold
+        if k >= len(X_train):
             continue
             
         clf = KNeighborsClassifier(n_neighbors=k)
@@ -188,7 +181,7 @@ if PRINT_RESULTS:
             'f1': mean_f1,
             'f1_std': std_f1
         })
-        print(f"  K={k:2d} Acc={mean_acc:.4f} +- {std_acc:.4f}, F1={mean_f1:.4f}±{std_f1:.4f}")
+        print(f"  K={k:2d} Acc={mean_acc:.4f} +- {std_acc:.4f}, F1={mean_f1:.4f} +- {std_f1:.4f}")
     
     
 # PLOTS
@@ -208,7 +201,7 @@ if PLOT_CONFUSION_MATRIX:
     plt.ylabel('True')
     plt.title(f'Featureless KNN Confusion Matrix (k={N_NEIGHBORS})')
     plt.tight_layout()
-    plt.savefig('KNN/featureless_knn_confusion_matrix.pdf', dpi=300)
+    plt.savefig('featureless_knn_confusion_matrix.pdf', dpi=300)
 
 if PLOT_K_ANALYSIS:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
@@ -220,16 +213,18 @@ if PLOT_K_ANALYSIS:
     f1_stds = [r['f1_std'] for r in k_summary]
 
     ax1.errorbar(k_vals, accs, yerr=acc_stds, fmt='o-', linewidth=2, markersize=8, capsize=5)
-    ax1.set_xlabel('K (Number of Neighbors)')
-    ax1.set_ylabel('Accuracy')
-    ax1.set_title('Accuracy vs K (mean ± std across folds)')
+    ax1.set_xlabel('K (Number of Neighbors)', fontsize=14)
+    ax1.set_ylabel('Accuracy', fontsize=14)
+    ax1.set_title('Accuracy vs K (mean ± std across folds)', fontsize=16)
+    ax1.tick_params(axis='both', labelsize=12)
     ax1.grid(True, alpha=0.3)
 
     ax2.errorbar(k_vals, f1s, yerr=f1_stds, fmt='o-', linewidth=2, markersize=8, color='orange', capsize=5)
-    ax2.set_xlabel('K (Number of Neighbors)')
-    ax2.set_ylabel('F1 Score')
-    ax2.set_title('F1 Score vs K (mean ± std across folds)')
+    ax2.set_xlabel('K (Number of Neighbors)', fontsize=14)
+    ax2.set_ylabel('F1 Score', fontsize=14)
+    ax2.set_title('F1 Score vs K (mean ± std across folds)', fontsize=16)
+    ax2.tick_params(axis='both', labelsize=12)
     ax2.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig('KNN/featureless_knn_k_analysis.pdf', dpi=300)
+    plt.savefig('featureless_knn_k_analysis.pdf', dpi=300)

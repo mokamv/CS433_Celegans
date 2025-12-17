@@ -21,9 +21,9 @@ warnings.filterwarnings('ignore')
 
 
 # PATHS
-DATA_DIR = Path("preprocessed_data/full")
+DATA_DIR = Path("../preprocessed_data/full")
 METADATA_FILE = DATA_DIR / "labels_and_metadata.csv"
-RAW_DATA_DIR = Path("data")
+RAW_DATA_DIR = Path("../data")
 
 # CONFIGURATIONS
 RANDOM_SEED = 42
@@ -116,9 +116,6 @@ metadata = pd.read_csv(METADATA_FILE)
 
 for idx, row in metadata.iterrows():
     relative_path = row['relative_path']
-    if 'TERBINAFINE- (control)-' in relative_path:
-        relative_path = 'TERBINAFINE- (control)'
-    
     file_path = DATA_DIR / relative_path / row['file']
     
     try:
@@ -336,5 +333,5 @@ if PLOT_CONFUSION_MATRIX:
     plt.ylabel('True')
     plt.title('CNN Confusion Matrix')
     plt.tight_layout()
-    plt.savefig('CNN/cnn_confusion_matrix.png', dpi=300)
+    plt.savefig('cnn_confusion_matrix.png', dpi=300)
     print("\nConfusion matrix saved to CNN/cnn_confusion_matrix.png")
