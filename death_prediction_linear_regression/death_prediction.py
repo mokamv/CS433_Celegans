@@ -1,64 +1,46 @@
-"""
-Polynomial regression to predict segments remaining until death using mean_speed.
-Data source: feature_data/segments_features.csv.
-Target extraction mirrors logic from death_proximity_regressor.py.
-"""
+'''
+Time from death prediction
 
+DECLARATION: ChatGPT was used to write code for generating plots. 
+'''
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from sklearn.linear_model import Ridge, Lasso
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
-from sklearn.model_selection import train_test_split, KFold, GroupKFold
+from sklearn.model_selection import GroupKFold
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import warnings
+import matplotlib.pyplot as plt
 
 warnings.filterwarnings('ignore')
 
-
 def load_and_prepare_data(features_csv_path, selected_features=None):
-	"""
-	Load features and compute target as 'segments_from_end' using segment indices.
-
-	- If 'segment_index' is missing, extract it from 'filename' using the pattern
-	  ...-segment{index}-preprocessed.csv as in death_proximity_regressor.
-	- Compute max segment per worm using 'original_file'.
-	- Target y = max_segment_index - segment_index (segments remaining until death).
-	- If selected_features is None or 'all', uses all numeric features except metadata columns.
-
-	Returns X (selected features), y (segments_from_end), and the cleaned DataFrame.
-	"""
 	features_csv_path = Path(features_csv_path)
 	df = pd.read_csv(features_csv_path)
 
-	# Exclude metadata columns
 	metadata_cols = {'filename', 'segment_index', 'original_file', 'max_segment_index', 'segments_from_end'}
 	
-	# If no features specified or 'all' requested, use all numeric columns except metadata
 	if not selected_features or selected_features == 'all':
 		numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 		selected_features = [col for col in numeric_cols if col not in metadata_cols]
 		print(f"Using all available features: {selected_features}")
 	
-	# Validate requested features exist
+  # check features exist
 	missing_feats = [f for f in selected_features if f not in df.columns]
 	if missing_feats:
 		raise ValueError(f"Missing requested feature columns in features CSV: {missing_feats}")
 
-	# Ensure segment_index exists; extract from filename if needed
 	if 'segment_index' not in df.columns or df['segment_index'].isna().all():
 		df['segment_index'] = df['filename'].str.extract(r'segment(\d+(?:\.\d+)?)', expand=False).astype(float)
 
-	# Validate necessary metadata
 	if 'original_file' not in df.columns:
 		raise ValueError("Missing required column 'original_file' to group segments per worm")
 
-	# Compute max segment index per worm and segments_from_end
 	max_segments = df.groupby('original_file')['segment_index'].max()
 	df['max_segment_index'] = df['original_file'].map(max_segments)
 	df['segments_from_end'] = df['max_segment_index'] - df['segment_index']
 
-	# Drop rows with missing values in required columns
 	required = list(selected_features) + ['segment_index', 'segments_from_end']
 	df_clean = df.dropna(subset=required).copy()
 
@@ -72,12 +54,6 @@ def load_and_prepare_data(features_csv_path, selected_features=None):
 
 
 def plot_mean_speed_vs_segments(df: pd.DataFrame, save_path: Path = None, show: bool = True):
-	"""Plot mean_speed against segments_from_end.
-
-	Requires columns 'mean_speed' and 'segments_from_end' in df.
-	"""
-	import matplotlib.pyplot as plt
-
 	if 'mean_speed' not in df.columns or 'segments_from_end' not in df.columns:
 		print("Plot skipped: 'mean_speed' or 'segments_from_end' missing in DataFrame")
 		return
@@ -106,31 +82,19 @@ def plot_mean_speed_vs_segments(df: pd.DataFrame, save_path: Path = None, show: 
 
 
 def plot_averaged_speed_vs_segments(df: pd.DataFrame, window_size: int = 5, save_path: Path = None, show: bool = True):
-	"""Plot averaged mean_speed over N consecutive segments vs segments_from_end.
-
-	Groups by worm (original_file), sorts by segment_index, then computes rolling average.
-	
-	Args:
-		df: DataFrame with columns 'original_file', 'segment_index', 'mean_speed', 'segments_from_end'
-		window_size: Number of consecutive segments to average over
-		save_path: Optional path to save the plot
-	"""
-	import matplotlib.pyplot as plt
-
 	required_cols = ['original_file', 'segment_index', 'mean_speed', 'segments_from_end']
 	if not all(col in df.columns for col in required_cols):
 		print(f"Plot skipped: Missing required columns {required_cols}")
 		return
 
-	# Make a copy and sort by worm and segment index
+	# sort by worm and segment index
 	df_sorted = df[required_cols].copy().sort_values(['original_file', 'segment_index'])
 
-	# Compute rolling average within each worm
+	# rolling average
 	df_sorted['mean_speed_avg'] = df_sorted.groupby('original_file')['mean_speed'].transform(
 		lambda x: x.rolling(window=window_size, min_periods=1).mean()
 	)
 
-	# Plot
 	plt.figure(figsize=(10, 6))
 	plt.scatter(df_sorted['mean_speed_avg'], df_sorted['segments_from_end'], s=20, alpha=0.6)
 	plt.xlabel(f'Mean Speed (averaged over {window_size} segments)')
@@ -150,25 +114,9 @@ def plot_averaged_speed_vs_segments(df: pd.DataFrame, window_size: int = 5, save
 	else:
 		plt.close()
 
-
-
-
-def train_polynomial_regression(X, y, feature_names, degree=2, alpha=1.0, test_size=0.2, random_state=42, n_splits=5, groups=None, regularization='l2'):
-	"""
-	Train a polynomial regression model using GroupKFold cross-validation.
-	
-	Args:
-		X: Feature matrix
-		y: Target vector
-		feature_names: Names of features
-		degree: Polynomial degree
-		alpha: Regularization strength
-		test_size: Test split size (unused, kept for compatibility)
-		random_state: Random seed
-		n_splits: Number of folds for GroupKFold
-		groups: Group labels for GroupKFold (e.g., worm IDs) - required
-		regularization: Type of regularization ('l2' for Ridge, 'l1' for Lasso)
-	"""
+def train_polynomial_regression(X, y, feature_names, degree=2, alpha=1.0, 
+																random_state=42, n_splits=5, 
+																groups=None, regularization='l2'):
 	if groups is None:
 		raise ValueError("GroupKFold requires groups parameter (worm IDs). Cannot train without it.")
 	
@@ -178,7 +126,6 @@ def train_polynomial_regression(X, y, feature_names, degree=2, alpha=1.0, test_s
 	poly = PolynomialFeatures(degree=degree, include_bias=False)
 	scaler = StandardScaler()
 	
-	# Choose regularization model
 	if regularization.lower() == 'l2':
 		regression_model = Ridge(alpha=alpha, max_iter=5000)
 		reg_name = 'Ridge (L2)'
@@ -186,7 +133,6 @@ def train_polynomial_regression(X, y, feature_names, degree=2, alpha=1.0, test_s
 		regression_model = Lasso(alpha=alpha, max_iter=5000, random_state=random_state)
 		reg_name = 'Lasso (L1)'
 	
-	# Group K-Fold Cross-Validation
 	gkf = GroupKFold(n_splits=n_splits)
 
 	fold_metrics = {
@@ -195,39 +141,31 @@ def train_polynomial_regression(X, y, feature_names, degree=2, alpha=1.0, test_s
 		'train_r2': [], 'test_r2': []
 	}
 
-	# Collect per-sample true/pred pairs (test folds) for downstream analysis/plots
 	y_true_pred = []
 	
 	print(f"\nGroup K-Fold Cross-Validation (k={n_splits}):")
 	print(f"  Degree: {degree} | {reg_name} alpha: {alpha}")
 	print(f"  Feature scaling: StandardScaler(mean/std)")
 	
-	# Generate splits
 	splits = gkf.split(X, y, groups)
 	
 	for fold_num, (train_idx, test_idx) in enumerate(splits):
 		X_train_fold, X_test_fold = X[train_idx], X[test_idx]
 		y_train_fold, y_test_fold = y[train_idx], y[test_idx]
 		
-		# Transform features
 		X_train_poly = poly.fit_transform(X_train_fold)
 		X_test_poly = poly.transform(X_test_fold)
 		
-		# Standardize
 		X_train_poly_std = scaler.fit_transform(X_train_poly)
 		X_test_poly_std = scaler.transform(X_test_poly)
 		
-		# Train
 		regression_model.fit(X_train_poly_std, y_train_fold)
 		
-		# Predict
 		y_train_pred = regression_model.predict(X_train_poly_std)
 		y_test_pred = regression_model.predict(X_test_poly_std)
 
-		# Save per-sample true/pred for test fold
 		y_true_pred.append((y_test_fold.copy(), y_test_pred.copy()))
 		
-		# Metrics
 		fold_metrics['train_rmse'].append(np.sqrt(mean_squared_error(y_train_fold, y_train_pred)))
 		fold_metrics['test_rmse'].append(np.sqrt(mean_squared_error(y_test_fold, y_test_pred)))
 		fold_metrics['train_mae'].append(mean_absolute_error(y_train_fold, y_train_pred))
@@ -237,15 +175,9 @@ def train_polynomial_regression(X, y, feature_names, degree=2, alpha=1.0, test_s
 		
 		print(f"  Fold {fold_num + 1}: Test RMSE={fold_metrics['test_rmse'][-1]:.4f}, Test MAE={fold_metrics['test_mae'][-1]:.4f}, Test R²={fold_metrics['test_r2'][-1]:.4f}")
 	
-	# Retrain on full data for final model
 	X_poly = poly.fit_transform(X)
 	X_poly_std = scaler.fit_transform(X_poly)
 	regression_model.fit(X_poly_std, y)
-	
-	try:
-		poly_feature_names = poly.get_feature_names_out(feature_names).tolist()
-	except Exception:
-		poly_feature_names = [f"f{i}" for i in range(X_poly.shape[1])]
 	
 	print(f"\nGroup K-Fold Results Summary:")
 	print(f"  Train RMSE: {np.mean(fold_metrics['train_rmse']):.4f} ± {np.std(fold_metrics['train_rmse']):.4f}")
@@ -273,26 +205,19 @@ def train_polynomial_regression(X, y, feature_names, degree=2, alpha=1.0, test_s
 	}
 
 
-def plot_error_by_true_bins(y_true_pred, bin_width=20, n_bins=None, save_path=None, show: bool = True):
-	"""Plot RMSE and MAE grouped by true segments-from-death bins and print stats."""
-	import matplotlib.pyplot as plt
-
+def plot_error_by_true_bins(y_true_pred, bin_width=20, save_path=None, show: bool = True):
 	if not y_true_pred:
 		print("No predictions available to plot.")
 		return None
 
-	# Flatten arrays
+	# Flatten 
 	y_true_all = np.concatenate([yt for yt, _ in y_true_pred])
 	y_pred_all = np.concatenate([yp for _, yp in y_true_pred])
 
 	max_true = y_true_all.max()
 
-	if n_bins is not None and n_bins > 0:
-		bin_edges = np.linspace(0, max_true, n_bins + 1)
-		bin_label = f"{n_bins} bins"
-	else:
-		bin_edges = np.arange(0, max_true + bin_width, bin_width)
-		bin_label = f"bin width = {bin_width}"
+	bin_edges = np.arange(0, max_true + bin_width, bin_width)
+	bin_label = f"bin width = {bin_width}"
 
 	bin_centers = []
 	rmse_vals = []
@@ -340,26 +265,13 @@ def plot_error_by_true_bins(y_true_pred, bin_width=20, n_bins=None, save_path=No
 		'rmse': np.array(rmse_vals),
 		'mae': np.array(mae_vals),
 		'counts': np.array(counts),
-		'bin_width': bin_width,
-		'n_bins': n_bins,
+		'bin_width': bin_width
 	}
 
 
-def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, alpha_grid=None, n_splits=5, regularization='l2', polynomial_degrees=None, show_plots: bool = False, error_bin_count: int | None = None, error_bin_width: int = 20):
-	"""Main execution function.
-
-	Args:
-		metric: Evaluation metric ('mae' or 'rmse')
-		selected_features: List of feature names to use
-		alpha: Regularization strength for polynomial regression
-		alpha_grid: List of alpha values to grid search
-		n_splits: Number of folds for GroupKFold CV
-		regularization: Type of regularization ('l2' for Ridge, 'l1' for Lasso)
-		polynomial_degrees: List of polynomial degrees to test (e.g., [1, 2, 3])
-		show_plots: Whether to display exploratory plots (mean speed vs segments)
-		error_bin_count: Override number of bins for the final error plot (if None, uses bin_width)
-		error_bin_width: Bin width to use when error_bin_count is None
-	"""
+def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, 
+				 alpha_grid=None, n_splits=5, regularization='l2', polynomial_degrees=None, 
+				 show_plots: bool = False, error_bin_width: int = 20):
 	base_dir = Path(__file__).parent
 	features_csv = base_dir.parent / "feature_data" / "segments_features.csv"
 
@@ -371,17 +283,15 @@ def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, alpha
 	print("Polynomial Regression for Segments Remaining Until Death (mean_speed)")
 	print("=" * 70)
 
-	# Load data and compute target
 	print("\nLoading features and computing segments_from_end...")
 	X, y, metadata, actual_features = load_and_prepare_data(features_csv, selected_features=selected_features)
-	# Quick visualization of mean_speed vs segments_from_end
+	
 	plot_mean_speed_vs_segments(metadata, save_path=base_dir / 'mean_speed_vs_segments.pdf', show=show_plots)
-	# Plot averaged mean_speed over segments
+	
 	plot_averaged_speed_vs_segments(metadata, window_size=5, save_path=base_dir / 'averaged_speed_vs_segments.pdf', show=show_plots)
-	# Use the actual feature names returned from load_and_prepare_data
+	
 	feature_names_used = actual_features
 	
-	# Extract groups (worm IDs) for GroupKFold
 	if 'original_file' in metadata.columns:
 		# Map worm names to numeric group indices
 		worm_to_group = {worm: idx for idx, worm in enumerate(metadata['original_file'].unique())}
@@ -390,13 +300,11 @@ def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, alpha
 	else:
 		raise ValueError("Missing required column 'original_file' for GroupKFold")
 
-	# Basic statistics
 	print(f"\nData Statistics:")
 	print(f"  Features selected: {selected_features}")
 	print(f"  X shape: {X.shape}, y shape: {y.shape}")
 	print(f"  Segments from end - Min: {y.min():.2f}, Max: {y.max():.2f}, Mean: {y.mean():.2f}")
 
-	# Train models with different polynomial degrees and (optionally) an alpha grid
 	if alpha_grid is None or len(alpha_grid) == 0:
 		alpha_grid = [alpha]
 
@@ -416,7 +324,6 @@ def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, alpha
 											   n_splits=n_splits, groups=groups, regularization=regularization)
 			grid_results[(degree, a)] = res
 
-		# pick best alpha for this degree
 		if metric.lower() == 'mae':
 			best_alpha = min(alpha_grid, key=lambda a: grid_results[(degree, a)]['test_mae'])
 		else:
@@ -443,7 +350,7 @@ def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, alpha
 		br = best_by_degree[deg]
 		print(f"{deg:<10} {br['alpha']:<12.4g} {br['test_rmse']:<12.4f} {br['test_mae']:<12.4f} {br['test_r2']:<10.4f}")
 
-	# Identify best degree based on chosen metric
+	# best degree based on chosen metric
 	if metric.lower() == 'mae':
 		best_pair = min(grid_results.keys(), key=lambda k: grid_results[k]['test_mae'])
 		best_value = grid_results[best_pair]['test_mae']
@@ -455,14 +362,14 @@ def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, alpha
 
 	# Plot error by true-bin for the best model and print stats
 	best_result = grid_results[best_pair]
-	plot_info = plot_error_by_true_bins(
+	
+	plot_error_by_true_bins(
 		best_result['y_true_pred'],
 		bin_width=error_bin_width,
-		n_bins=error_bin_count,
 		save_path=base_dir / 'error_by_true_bin.pdf'
 	)
 
-	# Compute RMSE/MAE restricted to 20-80 true segments-from-death
+	# Compute RMSE/MAE 20-80 segments-from-death
 	y_true_all = np.concatenate([yt for yt, _ in best_result['y_true_pred']])
 	y_pred_all = np.concatenate([yp for _, yp in best_result['y_true_pred']])
 	range_mask = (y_true_all >= 20) & (y_true_all <= 80)
@@ -487,7 +394,7 @@ def main(metric: str = 'rmse', selected_features=None, alpha: float = 1.0, alpha
 
 
 if __name__ == "__main__":
-	# Hardcoded configuration parameters
+	# configuration parameters
 	SELECTED_METRIC = 'mae'  # choose 'mae' or 'rmse'
 	# Choose features to use:
 	# - None or 'all': Use all available numeric features from CSV
@@ -505,11 +412,10 @@ if __name__ == "__main__":
 	POLYNOMIAL_DEGREES = [1,2,3,4]
 	# Whether to show exploratory mean speed plots when launching the script
 	SHOW_PLOTS = False
-	# Control error-plot binning: set ERROR_BIN_COUNT to an int to fix bin count; None reverts to fixed width
-	ERROR_BIN_COUNT = None
+	
 	ERROR_BIN_WIDTH = 5
 
 	results = main(metric=SELECTED_METRIC, selected_features=SELECTED_FEATURES, alpha=ALPHA, 
 			   alpha_grid=ALPHA_GRID, n_splits=N_SPLITS, regularization=REGULARIZATION,
 		   polynomial_degrees=POLYNOMIAL_DEGREES, show_plots=SHOW_PLOTS,
-		   error_bin_count=ERROR_BIN_COUNT, error_bin_width=ERROR_BIN_WIDTH)
+		   error_bin_width=ERROR_BIN_WIDTH)
